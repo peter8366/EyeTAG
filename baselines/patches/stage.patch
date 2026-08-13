@@ -1,0 +1,269 @@
+diff --git a/configs/default.json b/configs/default.json
+index 939a29d..6739678 100644
+--- a/configs/default.json
++++ b/configs/default.json
+@@ -1,6 +1,6 @@
+ {
+ 
+-    "datasrc_eve": "data/eve_dataset",
++    "datasrc_eve": "/path/to/eve_dataset",
+     "gaze360_path": "data/Gaze360",
+     "eyediap_path": "data/eyediap",
+ 
+diff --git a/datasources/EVE.py b/datasources/EVE.py
+index 32ee49c..3248ca9 100644
+--- a/datasources/EVE.py
++++ b/datasources/EVE.py
+@@ -14,10 +14,11 @@ from decord import cpu, gpu
+ logger = logging.getLogger(__name__)
+ 
+ predefined_splits = {
+-    'train': ['train%02d' % i for i in range(1, 40)],
+-    'val': ['val%02d' % i for i in range(1, 6)],
+-    'test': ['test%02d' % i for i in range(1, 11)],
+-    'etc': ['etc%02d' % i for i in range(1, 3)],
++    # Our EVE convention (subject-disjoint, matches comparison/{L2CS,CrossGaze,GazeTR,gaze360 LSTM}):
++    'train': ['train%02d' % i for i in range(1, 36)],   # train01-35 (35명, 학습)
++    'val':   ['train%02d' % i for i in range(36, 40)],  # train36-39 (4명, early stopping)
++    'test':  ['val%02d'   % i for i in range(1, 6)],    # val01-05 (5명, 최종 held-out)
++    'etc':   ['etc%02d'   % i for i in range(1, 3)],
+ }
+ 
+ 
+@@ -89,7 +90,8 @@ class EVEDatasetBase(Dataset):
+ 
+         # Some sanity checks
+         assert(len(self.participants_to_use) > 0)
+-        assert(30 > config.assumed_frame_rate)
++        # Relaxed to allow 30Hz native (no subsampling) — original was `30 > ...` (≤10Hz only).
++        assert(30 >= config.assumed_frame_rate)
+         assert(30 % config.assumed_frame_rate == 0)
+ 
+         # Load or calculate sequence segmentations (start/end indices)
+@@ -301,7 +303,7 @@ class EVEDatasetBase(Dataset):
+                         value,
+                         pad_width=[(0, pad_len if i == 0 else 0) for i in range(value.ndim)],
+                         mode='constant',
+-                        constant_values=(False if value.dtype is np.bool else 0.0),
++                        constant_values=(False if value.dtype == np.bool_ else 0.0),
+                     )
+ 
+         subentry['pad_length'] = self.config.max_sequence_len - frames.shape[0]
+@@ -363,6 +365,6 @@ class EVEDataset_test(EVEDatasetBase):
+     def __init__(self, dataset_path: str, **kwargs):
+         super(EVEDataset_test, self).__init__(
+             dataset_path,
+-            participants_to_use=predefined_splits['val'],
++            participants_to_use=predefined_splits['test'],  # val01-05 (our held-out)
+             **kwargs,
+         )
+diff --git a/datasources/Eyediap.py b/datasources/Eyediap.py
+index db9dbd0..908f0c3 100644
+--- a/datasources/Eyediap.py
++++ b/datasources/Eyediap.py
+@@ -130,7 +130,7 @@ class EyediapLoader(data.Dataset):
+ 
+         source_video = np.array(source_video).astype(np.float32)
+         gaze_pitchyaw = np.array(gaze_pitchyaw).astype(np.float32)
+-        validity = np.array(validity).astype(np.int)
++        validity = np.array(validity).astype(np.int64)
+ 
+         source_video = self.preprocess_frames(source_video)
+ 
+@@ -147,7 +147,7 @@ class EyediapLoader(data.Dataset):
+                         value,
+                         pad_width=[(0, pad_len if i == 0 else 0) for i in range(value.ndim)],
+                         mode='constant',
+-                        constant_values=(False if value.dtype is np.bool else 0.0),
++                        constant_values=(False if value.dtype == np.bool_ else 0.0),
+                     )
+ 
+         torch_entry = dict([
+diff --git a/datasources/Gaze360.py b/datasources/Gaze360.py
+index 6f8d61c..549e99e 100644
+--- a/datasources/Gaze360.py
++++ b/datasources/Gaze360.py
+@@ -161,7 +161,7 @@ class Gaze360Loader(data.Dataset):
+         validity[-1] = 1
+         source_video = np.array(source_video).astype(np.float32)
+         gaze_pitchyaw = np.array(gaze_pitchyaw).astype(np.float32)
+-        validity = np.array(validity).astype(np.int)
++        validity = np.array(validity).astype(np.int64)
+ 
+         source_video = self.preprocess_frames(source_video)
+ 
+@@ -178,7 +178,7 @@ class Gaze360Loader(data.Dataset):
+                         value,
+                         pad_width=[(0, pad_len if i == 0 else 0) for i in range(value.ndim)],
+                         mode='constant',
+-                        constant_values=(False if value.dtype is np.bool else 0.0),
++                        constant_values=(False if value.dtype == np.bool_ else 0.0),
+                     )
+ 
+         torch_entry = dict([
+diff --git a/gp_personalization.py b/gp_personalization.py
+index c850f4f..ae69d6e 100644
+--- a/gp_personalization.py
++++ b/gp_personalization.py
+@@ -115,7 +115,7 @@ class EyediapLoader(data.Dataset):
+         gaze_pitchyaw = np.zeros((len(selected_samples), self.config.max_sequence_len, 2)).astype(np.float32)
+         source_video = np.zeros((len(selected_samples), self.config.max_sequence_len, self.config.face_size[0], self.config.face_size[1], 3)).astype(
+             np.float32)
+-        validity = np.zeros((len(selected_samples), self.config.max_sequence_len)).astype(np.int)
++        validity = np.zeros((len(selected_samples), self.config.max_sequence_len)).astype(np.int64)
+ 
+         count = 0
+         for sample in selected_samples:
+@@ -198,7 +198,7 @@ class EyediapLoader(data.Dataset):
+ 
+         source_video = np.array(source_video).astype(np.float32)
+         gaze_pitchyaw = np.array(gaze_pitchyaw).astype(np.float32)
+-        validity = np.array(validity).astype(np.int)
++        validity = np.array(validity).astype(np.int64)
+ 
+         source_video = self.preprocess_frames(source_video)
+ 
+@@ -215,7 +215,7 @@ class EyediapLoader(data.Dataset):
+                         value,
+                         pad_width=[(0, pad_len if i == 0 else 0) for i in range(value.ndim)],
+                         mode='constant',
+-                        constant_values=(False if value.dtype is np.bool else 0.0),
++                        constant_values=(False if value.dtype == np.bool_ else 0.0),
+                     )
+ 
+         torch_entry = dict([
+diff --git a/main.py b/main.py
+index 0953a4b..25d998b 100644
+--- a/main.py
++++ b/main.py
+@@ -115,14 +115,30 @@ def main(config):
+     with open(os.path.join(config.save_path, "test_errors.txt"), "a") as text_file:
+         text_file.write('EVE dataset: {}'.format(acc_str))
+ 
+-    print(' -------- Testing on Eyediap Test dataset ------------- ')
+-    _losses = Tester.eyediap_test(args=config, trainer=model, device=device)
+-    acc_str = ', '.join(['%s: %.6f\n' % (k, _losses[k]) for k, v in _losses.items()])
+-    with open(os.path.join(config.save_path, "test_errors.txt"), "a") as text_file:
+-        text_file.write('Eyediap dataset: {}'.format(acc_str))
++    # Save EVE test result as JSON in our standard comparison-baseline format.
++    eve_out_json = os.path.join(config.save_path, 'eval_test_eve.json')
++    with open(eve_out_json, 'w') as jf:
++        json.dump({
++            'checkpoint': config.load_checkpoint_path if config.load_checkpoint_path else 'iter_%d' % config.num_iter,
++            'test_split': 'test',
++            'target_hz': config.assumed_frame_rate,
++            'camera': config.test_cameras[0] if len(config.test_cameras) == 1 else config.test_cameras,
++            'max_sequence_len': config.max_sequence_len,
++            'losses': {k: float(v) for k, v in _losses.items()},
++        }, jf, indent=2)
++    print(f' Saved EVE test JSON -> {eve_out_json}')
++
++    # Optional extra-dataset eval (Eyediap/Gaze360) — only if their data paths are provided.
++    if getattr(config, 'enable_eyediap_test', False) and os.path.isdir(getattr(config, 'eyediap_path', '')):
++        print(' -------- Testing on Eyediap Test dataset ------------- ')
++        _losses = Tester.eyediap_test(args=config, trainer=model, device=device)
++        acc_str = ', '.join(['%s: %.6f\n' % (k, _losses[k]) for k, v in _losses.items()])
++        with open(os.path.join(config.save_path, "test_errors.txt"), "a") as text_file:
++            text_file.write('Eyediap dataset: {}'.format(acc_str))
+ 
+-    print(' -------- Testing on Gaze360 Test dataset ------------- ')
+-    Tester.gaze360_test(args=config, trainer=model, device=device)
++    if getattr(config, 'enable_gaze360_test', False) and os.path.isdir(getattr(config, 'gaze360_path', '')):
++        print(' -------- Testing on Gaze360 Test dataset ------------- ')
++        Tester.gaze360_test(args=config, trainer=model, device=device)
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/main_gaze360.py b/main_gaze360.py
+index 3705394..7da29d7 100644
+--- a/main_gaze360.py
++++ b/main_gaze360.py
+@@ -194,7 +194,7 @@ class Gaze360Loader(data.Dataset):
+ 
+         source_video = np.array(source_video).astype(np.float32)
+         gaze_pitchyaw = np.array(gaze_pitchyaw).astype(np.float32)
+-        validity = np.array(validity).astype(np.int)
++        validity = np.array(validity).astype(np.int64)
+ 
+         source_video = self.preprocess_frames(source_video)
+ 
+@@ -211,7 +211,7 @@ class Gaze360Loader(data.Dataset):
+                         value,
+                         pad_width=[(0, pad_len if i == 0 else 0) for i in range(value.ndim)],
+                         mode='constant',
+-                        constant_values=(False if value.dtype is np.bool else 0.0),
++                        constant_values=(False if value.dtype == np.bool_ else 0.0),
+                     )
+ 
+         torch_entry = dict([
+diff --git a/models/stage_transformer.py b/models/stage_transformer.py
+index 8bed665..32d1393 100644
+--- a/models/stage_transformer.py
++++ b/models/stage_transformer.py
+@@ -38,6 +38,54 @@ def build_model():
+     return model
+ 
+ 
++VGGFACE2_PKL = '/path/to/checkpoints/resnet50_ft_weight.pkl'
++
++
++class _StageInputToVGGFace2(nn.Module):
++    """STAGE feeds frames normalized to [-1, 1] (x*2/255 - 1, RGB).
++    VGGFace2 weights expect BGR / 0-255 / mean-subtracted input."""
++
++    def __init__(self):
++        super().__init__()
++        self.register_buffer('vgg_mean',
++                             torch.tensor([91.4953, 103.8827, 131.0912]).view(1, 3, 1, 1))
++
++    def forward(self, x):
++        x = (x + 1.0) * 127.5          # [-1,1] -> RGB 0-255
++        x = x.flip(dims=[1])           # RGB -> BGR
++        return x - self.vgg_mean
++
++
++def build_model_vggface2():
++    """Same-backbone control (rebuttal): VGGFace2 ResNet-50 truncated at layer3,
++    projected 1024->256 so the SAM modules see the identical feature shape
++    (256ch, 8x8 for 128x128 input) as the original GazeCLR ResNet-18."""
++    import pickle
++    cnn = torchvision.models.resnet50(weights=None)
++    with open(VGGFACE2_PKL, 'rb') as f:
++        raw = pickle.load(f, encoding='latin1')
++    own = cnn.state_dict()
++    n_loaded = 0
++    for k, v in raw.items():
++        if k.startswith('fc.'):
++            continue
++        t = torch.from_numpy(v) if not isinstance(v, torch.Tensor) else v
++        if k in own and own[k].shape == t.shape:
++            own[k] = t
++            n_loaded += 1
++    cnn.load_state_dict(own, strict=False)
++    print(f'*******Loaded VGGFace2 R50 backbone ({n_loaded} tensors)********')
++
++    proj = nn.Conv2d(1024, 256, kernel_size=1, bias=False)  # match SAM input (256, 8, 8)
++    layers = [
++        _StageInputToVGGFace2(),
++        cnn.conv1, cnn.bn1, cnn.relu, cnn.maxpool,
++        cnn.layer1, cnn.layer2, cnn.layer3,
++        proj,
++    ]
++    return torch.nn.Sequential(*layers)
++
++
+ class STAGE_Transformer(nn.Module):
+ 
+     def __init__(self, config):
+@@ -46,7 +94,10 @@ class STAGE_Transformer(nn.Module):
+         self.config = config
+         self.input_type = config.camera_frame_type
+ 
+-        self.conv_feature_extractor = build_model()
++        if getattr(config, 'backbone', 'gazeclr-r18') == 'vggface2-r50':
++            self.conv_feature_extractor = build_model_vggface2()
++        else:
++            self.conv_feature_extractor = build_model()
+ 
+         if self.config.spatial_model == "dual":
+             self.spatial_info = AddSpatialInfo()

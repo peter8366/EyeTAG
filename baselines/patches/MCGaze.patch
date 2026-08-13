@@ -1,0 +1,22 @@
+diff --git a/tools/gaze360_img_reorganize.py b/tools/gaze360_img_reorganize.py
+index f7670e3..e18291f 100644
+--- a/tools/gaze360_img_reorganize.py
++++ b/tools/gaze360_img_reorganize.py
+@@ -7,12 +7,12 @@ import numpy as np
+ import torch
+ 
+ ################### you should modify the path to raw gaze360 dataset  ############################
+-ori_dataset_root = "PATH to raw GAZE360 img dir eg. DataSet/gaze360/gaze360_dataset_htrht37t43t9723kdfnJKhf_v2/imgs"
+-meta_data_root = "PATH to raw GAZE360 metadata eg. DataSet/gaze360/gaze360_dataset_htrht37t43t9723kdfnJKhf_v2/metadata.mat"
+-origt = "PATH to raw GAZE360 dataset dir eg. DataSet/gaze360/gaze360_dataset_htrht37t43t9723kdfnJKhf_v2"
++ori_dataset_root = "/path/to/gaze360_original/imgs"
++meta_data_root = "/path/to/gaze360_original/metadata.mat"
++origt = "/path/to/gaze360/code"
+ ###################################################################################################
+-dataset_settings = ['FULL', 'L2CS']
+-target_dataset_roots = ['data/gaze360/', 'data/l2cs/']
++dataset_settings = ['FULL']
++target_dataset_roots = ['data/gaze360/']  # gaze360-setting only (rebuttal)
+ splits = ['train','test']
+ 
+ for dataset_setting, target_dataset_root in zip(dataset_settings, target_dataset_roots):

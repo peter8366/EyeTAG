@@ -1,0 +1,13 @@
+# Core (tested with Python 3.11)
+torch==2.2.2
+torchvision==0.17.2
+numpy<2                 # torch 2.2.x is built against the NumPy 1.x ABI
+opencv-python>=4.8
+tensorboard>=2.14
+
+# EVE only: MP4 decoding and HDF5 label reading
+decord==0.6.0
+h5py>=3.9
+
+# Optional: experiment logging (enable with --wandb)
+# wandb>=0.16

@@ -1,0 +1,106 @@
+diff --git a/code/model.py b/code/model.py
+index ab6c5a0..441a270 100755
+--- a/code/model.py
++++ b/code/model.py
+@@ -49,6 +49,101 @@ class GazeLSTM(nn.Module):
+         var = var.view(-1,1).expand(var.size(0),2)
+ 
+         return angular_output,var
++class VGGFace2Backbone(nn.Module):
++    """torchvision ResNet-50 + cydonia999 VGGFace2 weights, drop-in for the
++    custom resnet18 of GazeLSTM (applies the final 256-d projection inside
++    forward, mirroring resnet.py's fc2 behavior).
++
++    The dataloader feeds ImageNet-normalized RGB; the VGGFace2 weights expect
++    BGR / 0-255 / mean-subtracted input, so we re-normalize inside forward
++    (same as eyetag models/face_vggface2.py).
++    """
++
++    PKL = '/path/to/checkpoints/resnet50_ft_weight.pkl'
++
++    def __init__(self, out_dim=256, pkl_path=None):
++        super().__init__()
++        import pickle
++        from torchvision.models import resnet50
++        base = resnet50(weights=None)
++        base.fc = nn.Identity()
++
++        pkl_path = pkl_path or self.PKL
++        with open(pkl_path, 'rb') as f:
++            raw = pickle.load(f, encoding='latin1')
++        own = base.state_dict()
++        n_loaded = 0
++        for k, v in raw.items():
++            if k.startswith('fc.'):
++                continue
++            t = torch.from_numpy(v) if not isinstance(v, torch.Tensor) else v
++            if k in own and own[k].shape == t.shape:
++                own[k] = t
++                n_loaded += 1
++        base.load_state_dict(own, strict=False)
++        print(f'[VGGFace2Backbone] loaded {n_loaded} VGGFace2 tensors from {pkl_path}')
++
++        self.base = base
++        self.fc2 = nn.Linear(2048, out_dim)
++
++        self.register_buffer('im_mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
++        self.register_buffer('im_std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
++        self.register_buffer('vgg_mean', torch.tensor([91.4953, 103.8827, 131.0912]).view(1, 3, 1, 1))
++
++    def forward(self, x):
++        # ImageNet-normalized RGB → BGR 0-255 mean-subtracted
++        x = x * self.im_std + self.im_mean
++        x = x * 255.0
++        x = x.flip(dims=[1])
++        x = x - self.vgg_mean
++        return self.fc2(self.base(x))
++
++
++class GazeLSTM_VGGFace2(nn.Module):
++    """GazeLSTM with the face backbone swapped to VGGFace2 ResNet-50.
++
++    Everything else (LSTM, head, PinBall training) is identical to GazeLSTM —
++    the point is a same-backbone control experiment, so only the backbone
++    variable changes.
++    """
++
++    def __init__(self):
++        super(GazeLSTM_VGGFace2, self).__init__()
++        self.img_feature_dim = 256
++
++        self.base_model = VGGFace2Backbone(out_dim=self.img_feature_dim)
++
++        self.lstm = nn.LSTM(self.img_feature_dim, self.img_feature_dim,
++                            bidirectional=True, num_layers=2, batch_first=True)
++        self.last_layer = nn.Linear(2 * self.img_feature_dim, 3)
++
++    def forward(self, input):
++        base_out = self.base_model(input.view((-1, 3) + input.size()[-2:]))
++        base_out = base_out.view(input.size(0), 7, self.img_feature_dim)
++
++        lstm_out, _ = self.lstm(base_out)
++        lstm_out = lstm_out[:, 3, :]
++        output = self.last_layer(lstm_out).view(-1, 3)
++
++        angular_output = output[:, :2]
++        angular_output[:, 0:1] = math.pi * nn.Tanh()(angular_output[:, 0:1])
++        angular_output[:, 1:2] = (math.pi / 2) * nn.Tanh()(angular_output[:, 1:2])
++
++        var = math.pi * nn.Sigmoid()(output[:, 2:3])
++        var = var.view(-1, 1).expand(var.size(0), 2)
++
++        return angular_output, var
++
++
++def build_model(backbone='r18'):
++    """Factory used by run_gaze360.py / test_subsets.py --backbone flag."""
++    if backbone == 'r18':
++        return GazeLSTM()
++    elif backbone == 'vggface2-r50':
++        return GazeLSTM_VGGFace2()
++    raise ValueError(f'unknown backbone: {backbone}')
++
++
+ class PinBallLoss(nn.Module):
+     def __init__(self):
+         super(PinBallLoss, self).__init__()

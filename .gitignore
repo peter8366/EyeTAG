@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Pretrained backbones and trained models (see README for download links)
+checkpoints/
+*.pth
+*.pkl
+*.ckpt
+
+# Experiment outputs
+work_dir/
+runs/
+wandb/
+analysis/data/
+analysis/*.json
+analysis/*.csv
+*.log
+*.out
+
+# Datasets
+data/
+*.npz
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
