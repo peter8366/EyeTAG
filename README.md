@@ -1,9 +1,21 @@
 # EyeTAG: Eye Trajectory-Aware Gaze Estimation
 
-Official implementation of **EyeTAG**, a causal multi-frame gaze estimator built
-around an *explicit* first-order gaze prior: at every step the model
-differentiates its own recent predictions and feeds that differential trajectory
-back in as a compact kinematic token.
+[![Conference](https://img.shields.io/badge/BMVC-2026-1f6feb.svg)](https://bmvc2026.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11-3776ab.svg)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.2-ee4c2c.svg)](https://pytorch.org/)
+
+This repository is the **official PyTorch implementation** of the BMVC 2026 paper
+**"EyeTAG: Eye Trajectory-Aware Gaze Estimation"**.
+
+**Jungmin Lee**, Niamat Ullah<sup>†</sup>, Yoseob Han<sup>†</sup><br>
+Soongsil University, Seoul, Republic of Korea<br>
+<sub><sup>†</sup> Co-corresponding authors</sub>
+
+EyeTAG is a causal multi-frame gaze estimator built around an *explicit*
+first-order gaze prior: at every step the model differentiates its own recent
+predictions and feeds that differential trajectory back in as a compact
+kinematic token.
 
 > Most video gaze estimators do model time, but only *implicitly* — motion has to
 > be recovered from high-dimensional appearance features that must simultaneously
