@@ -60,7 +60,7 @@ deployment can cache them across the sliding window.
 ## Installation
 
 ```bash
-git clone https://github.com/<user>/EyeTAG.git
+git clone https://github.com/peter8366/EyeTAG.git
 cd EyeTAG
 conda create -n eyetag python=3.11 -y && conda activate eyetag
 pip install -r requirements.txt
@@ -226,7 +226,7 @@ reproduce our runs, including the backbone-controlled variants.
 ```bibtex
 @inproceedings{eyetag2026,
   title     = {EyeTAG: Eye Trajectory-Aware Gaze Estimation},
-  author    = {Lee, Jungmin and others},
+  author    = {Lee, Jungmin and Ullah, Niamat and Han, Yoseob},
   booktitle = {British Machine Vision Conference (BMVC)},
   year      = {2026}
 }
